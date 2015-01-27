@@ -20,8 +20,8 @@ public:
   double min() const;
   double max() const;
 
-  double eval(const std::vector<float> &args) const;
-  unsigned int nTreeVariables() const { return treeVariables_.size(); }
+  double eval(const std::vector<float*> &args) const;
+  size_t nTreeVariables() const { return treeVariables_.size(); }
   TString treeVariable(unsigned int i) const { return treeVariables_.at(i); }
   
 
@@ -35,7 +35,8 @@ private:
 
   double eval(double x1, const TString &op, const TString &func2, double x2) const;
   double eval(const TString &func, double x) const;
-  void splitIntoOperands(const TString &expr, std::vector<TString> &operands, std::vector<TString> &operators) const;
+  double scaledVal(const double x) const;
+  void splitIntoOperands(TString expr, std::vector<TString> &operands, std::vector<TString> &operators) const;
   void splitIntoFunctionAndTreeVariable(const TString &expr, TString &func, TString &treeVar) const;
   void setLabel();
   void setUnit();
@@ -49,10 +50,16 @@ Variable::Variable(const TString &expr) {
   str.ReplaceAll(" ","");
   std::vector<TString> operands;
   splitIntoOperands(str,operands,operators_);
+  // if( operators_.size() > 0 ) std::cout << "operators_.back() = '" << operators_.back() << "'" << std::endl;
+  // std::cout << "operands.front() = '" << operands.front() << "'" << std::endl;
+  // std::cout << "operands.back() = '" << operands.back() << "'" << std::endl;
   functions_ = std::vector<TString>(operands.size(),"");
   treeVariables_ = std::vector<TString>(operands.size(),"");
   for(unsigned int i = 0; i < operands.size(); ++i) {
     splitIntoFunctionAndTreeVariable(operands.at(i),functions_.at(i),treeVariables_.at(i));
+    // std::cout << i << ": operands = '" << operands.at(i) << "'" << std::endl;
+    // std::cout << i << ": functions_ = '" << functions_.at(i) << "'" << std::endl;
+    // std::cout << i << ": treeVariables_ = '" << treeVariables_.at(i) << "'" << std::endl;
   }
   if( !( functions_.size() == treeVariables_.size() &&
 	 treeVariables_.size() >= 1 &&
@@ -80,7 +87,7 @@ void Variable::setLabel() {
   screenLabel_.ReplaceAll("*","");
   screenLabel_.ReplaceAll("(","");
   screenLabel_.ReplaceAll(")","");
-  std::cout << "Found Variable '" << screenLabel() << "'" << std::endl;
+  //  std::cout << "Found Variable '" << screenLabel() << "'" << std::endl;
   label_.ReplaceAll("*"," #upoint ");
   label_.ReplaceAll("d","#Delta ");
   label_.ReplaceAll("phi","#phi");
@@ -96,13 +103,15 @@ void Variable::setUnit() {
     else if( var == "y"  ) str = "cm";
     else if( var == "z"  ) str = "cm";
     else if( var == "r"  ) str = "cm";
-    else if( var == "dx" ) str = "cm";
-    else if( var == "dy" ) str = "cm";
-    else if( var == "dz" ) str = "cm";
+    else if( var == "dx" ) str = "#mum";
+    else if( var == "dy" ) str = "#mum";
+    else if( var == "dz" ) str = "#mum";
+    else if( var == "dr" ) str = "#mum";
     if( str != "" ) {
       if( unit_ == "" ) unit_ += str;
       else              unit_ += " "+str;
     }
+    if( i > 0 && var == "dphi" ) unit_ = "#mum"; // hack fro rdphi
   }
   if( unit_ != "" ) {
     unit_ = " ["+unit_+"]";
@@ -113,15 +122,14 @@ void Variable::setUnit() {
 // Recognises the following expressions
 // - <var>
 // - <var1> * <var2>
-void Variable::splitIntoOperands(const TString &expr, std::vector<TString> &operands, std::vector<TString> &operators) const {
-  TString str(expr);
-  if( str.Contains("*") ) {
-    const int pos = str.First("*");
+void Variable::splitIntoOperands(TString expr, std::vector<TString> &operands, std::vector<TString> &operators) const {
+  if( expr.Contains("*") ) {
+    const int pos = expr.First("*");
     operators.push_back("*");
-    operands.push_back(str(0,pos));
-    operands.push_back(str(pos+1,str.Length()-pos-1));
+    operands.push_back(expr(0,pos));
+    operands.push_back(expr(pos+1,expr.Length()-pos-1));
   } else {
-    operands.push_back(str);
+    operands.push_back(expr);
   }
 }
 
@@ -140,20 +148,22 @@ void Variable::splitIntoFunctionAndTreeVariable(const TString &expr, TString &fu
     func = "1";
     treeVar = str;
   }
+  //  std::cout << "'" << expr << "' --> '" << func << "' : '" << treeVar << "'" << std::endl;
 }
 
 
-double Variable::eval(const std::vector<float> &args) const {
+double Variable::eval(const std::vector<float*> &args) const {
   if( args.size() != operators_.size()+1 ) {
     std::cerr << "\n\nERROR in Variable::eval(): wrong number of arguments given" << std::endl;
     throw std::exception();
   }
-  double val = eval(functions_.front(),args.front());
+  double val = eval(functions_.front(),*(args.front()));
+  //  std::cout << ">>> val('" << functions_.front() << "','" << args.front() << ") = " << val << std::endl;
   for(unsigned int i = 0; i < operators_.size(); ++i) {
-    val = eval(val,operators_.at(i),functions_.at(i+1),args.at(i+1));
+    val = eval(val,operators_.at(i),functions_.at(i+1),*(args.at(i+1)));
   }
 
-  return val;
+  return scaledVal(val);
 }
 
 
@@ -171,6 +181,24 @@ double Variable::eval(const TString &func, double x) const {
   else if( func == "sin" ) val = sin(x);
 
   return val;
+}
+
+
+// Scale value to a different unit, e.g. dr is in mu instead of cm
+// this is really clumsy and only works for products, deltas
+// really should restructure this, making variable a composite or sth
+double Variable::scaledVal(const double x) const {
+  double scale = 1.;
+  for(unsigned int i = 0; i < treeVariables_.size(); ++i) {
+    const TString var(treeVariables_.at(i));
+    if(      var == "dr"   ) scale *= 1E4; // in mum
+    else if( var == "dx"   ) scale *= 1E4; // in mum
+    else if( var == "dy"   ) scale *= 1E4; // in mum
+    else if( var == "dz"   ) scale *= 1E4; // in mum
+    else if( var == "dphi" ) scale *= 1E4; // in murad
+  }
+
+  return x*scale;
 }
 
 

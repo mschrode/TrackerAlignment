@@ -20,20 +20,22 @@
   // GeometryComparison t0(path+"mp1337_vs_twist5.Comparison_commonTracker.root","twist_on_mp1337");
   // t0.draw("dphi:z",dphiMin,dphiMax);
   // GeometryComparison t1(path+"mp1337_vs_mp1392.Comparison_commonTracker.root","twist_mp1337_vs_mp1392");
+  // t1.excludeModules("/home/matsch/tmp/mp1337ExclAlignables.txt");
   // t1.draw("dphi:z",dphiMin,dphiMax);
   // GeometryComparison t2(path+"mp1337_vs_mp1397.Comparison_commonTracker.root","twist_mp1337_vs_mp1397");
   // t2.draw("dphi:z",dphiMin,dphiMax);
 
   // // sagitta misalignment wrt to starting geometry
-  // GeometryComparison s0(path+"mp1337_vs_sagitta2.Comparison_commonTracker.root","sagitta_on_mp1337");
-  // s0.draw("dy:r",dyMin,dyMax);
+  GeometryComparison s0(path+"mp1337_vs_sagitta2.Comparison_commonTracker.root","sagitta_on_mp1337");
+  s0.draw("dy:r",dyMin,dyMax);
   GeometryComparison s1(path+"mp1337_vs_mp1393.Comparison_commonTracker.root","sagitta_mp1337_vs_mp1393");
-  //  s1.excludeModules("/home/matsch/tmp/mp1337ExclAlignables.txt");
+  s1.excludeModules("/home/matsch/tmp/mp1337ExclAlignables.txt");
   s1.draw("dy:r",dyMin,dyMax);
   // GeometryComparison s2(path+"mp1337_vs_mp1394.Comparison_commonTracker.root","sagitta_mp1337_vs_mp1394");
   // s2.draw("dy:r",dyMin,dyMax);
-  // GeometryComparison s11(path+"mp1337_vs_mp1399.Comparison_commonTracker.root","sagitta_mp1337_vs_mp1399");
-  // s11.draw("dy:r",dyMin,dyMax);
+  GeometryComparison s11(path+"mp1337_vs_mp1399.Comparison_commonTracker.root","sagitta_mp1337_vs_mp1399");
+  s11.excludeModules("/home/matsch/tmp/mp1337ExclAlignables.txt");
+  s11.draw("dy:r",dyMin,dyMax);
 
   // twist misalignment wrt to iterated starting geometry
   // GeometryComparison tt1(path+"mp1385_vs_mp1392.Comparison_commonTracker.root","twist_mp1385_vs_mp1392");

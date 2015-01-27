@@ -25,7 +25,6 @@
 class GeometryComparison {
 public:
   GeometryComparison(const TString &fileName, const TString &id);
-  ~GeometryComparison();
 
   void excludeModules(const TString& fileName);
 
@@ -39,8 +38,7 @@ private:
   const int nSubDet_;
 
   TString id_;
-  TFile* file_;
-  TTree* tree_;
+  TString fileName_;
   std::set<int> exclAlignables_;
 
   Plots createPlots(const Variable &var1, const Variable &var2) const;
@@ -52,21 +50,10 @@ private:
 
 GeometryComparison::GeometryComparison(const TString &fileName, const TString &id)
   : nSubDet_(6) {
+  TH1::AddDirectory(true);
   id_ = id;
   id_.ReplaceAll(".root","");
-  file_ = new TFile(fileName,"READ");
-  tree_ = NULL;
-  file_->GetObject("alignTree",tree_);
-  if( tree_ == NULL ) {
-    std::cerr << "\n\nERROR reading tree from file" << std::endl;
-    throw std::exception();
-  }
-}
-
-
-GeometryComparison::~GeometryComparison() {
-  file_->Close();
-  delete file_;
+  fileName_ = fileName;
 }
 
 
@@ -81,7 +68,6 @@ void GeometryComparison::draw(const TString &expr, double min, double max) const
   const TString expr2 = str(posColon+1,str.Length()-posColon-1);
   Variable var1(expr1);
   Variable var2(expr2);
-
   TCanvas* can = new TCanvas("can_"+id_+"_"+var1()+":"+var2(),var1()+":"+var2(),500,500);
   can->cd();
   Plots plots = createPlots(var1,var2);
@@ -109,6 +95,13 @@ void GeometryComparison::draw(const TString &expr, double min, double max) const
     it->second->Draw("Psame");
   }
   can->SaveAs(id_+"_"+var1.screenLabel()+"_vs_"+var2.screenLabel()+".pdf");
+
+  for(PlotIt it = plots.begin(); it != plots.end(); ++it) {
+    delete it->second;
+  }
+  plots.clear();
+  delete hFrame;
+  delete can;
 }
 
 
@@ -119,25 +112,91 @@ GeometryComparison::Plots GeometryComparison::createPlots(const Variable &var1, 
   std::vector< std::vector<float> > xs(nSubDet_);
   std::vector< std::vector<float> > ys(nSubDet_);
 
+  // names of used tree variables and their values
+  // note: can use SetBranchAddress only to ONE variable!
+  std::vector<TString> names;
+  std::vector<float> vals;
+  for(size_t i = 0; i < var1.nTreeVariables(); ++i) {
+    const TString name = var1.treeVariable(i);
+    bool nameExist = false;
+    for(size_t j = 0; j < names.size(); ++j) {
+      if( names.at(j) == name ) {
+	nameExist = true;
+	break;
+      }
+    }
+    if( !nameExist ) {
+      names.push_back(name);
+      vals.push_back(0.);
+    }
+  }
+  for(size_t i = 0; i < var2.nTreeVariables(); ++i) {
+    const TString name = var2.treeVariable(i);
+    bool nameExist = false;
+    for(size_t j = 0; j < names.size(); ++j) {
+      if( names.at(j) == name ) {
+	nameExist = true;
+	break;
+      }
+    }
+    if( !nameExist ) {
+      names.push_back(name);
+      vals.push_back(0.);
+    }
+  }
+
   int id = 0;
   int level = 0;
   int sublevel = 0;
-  std::vector<float> yVals(var1.nTreeVariables(),0.);
-  std::vector<float> xVals(var2.nTreeVariables(),0.);
-  tree_->SetBranchAddress("id",&id);
-  tree_->SetBranchAddress("level",&level);
-  tree_->SetBranchAddress("sublevel",&sublevel);
-  for(unsigned int i = 0; i < yVals.size(); ++i) {
-    tree_->SetBranchAddress(var1.treeVariable(i),&yVals.at(i));
+
+  TFile file(fileName_,"READ");
+  TTree* tree = NULL;
+  file.GetObject("alignTree",tree);
+  if( tree == NULL ) {
+    std::cerr << "\n\nERROR reading tree from file" << std::endl;
+    throw std::exception();
   }
-  for(unsigned int i = 0; i < xVals.size(); ++i) {
-    tree_->SetBranchAddress(var2.treeVariable(i),&xVals.at(i));
+
+
+  tree->SetBranchAddress("id",&id);
+  tree->SetBranchAddress("level",&level);
+  tree->SetBranchAddress("sublevel",&sublevel);
+  for(size_t i = 0; i < names.size(); ++i) {
+    tree->SetBranchAddress(names.at(i),&vals.at(i));
   }
-  for(int i = 0; i < tree_->GetEntries(); ++i) {
-    tree_->GetEntry(i);
+
+
+  // pointers to variables read from tree
+  std::vector<float*> yVals(var1.nTreeVariables(),0);
+  std::vector<float*> xVals(var2.nTreeVariables(),0);
+  for(size_t i = 0; i < var1.nTreeVariables(); ++i) {
+    const TString name = var1.treeVariable(i);
+    for(size_t j = 0; j < names.size(); ++j) {
+      if( names.at(j) == name ) {
+	yVals.at(i) = &(vals.at(j));
+	break;
+      }
+    }    
+  }
+  for(size_t i = 0; i < var2.nTreeVariables(); ++i) {
+    const TString name = var2.treeVariable(i);
+    for(size_t j = 0; j < names.size(); ++j) {
+      if( names.at(j) == name ) {
+	xVals.at(i) = &(vals.at(j));
+	break;
+      }
+    }    
+  }
+
+  // loop over tree
+  for(int i = 0; i < tree->GetEntries(); ++i) {
+    tree->GetEntry(i);
+
     if( exclAlignables_.find( id ) != exclAlignables_.end() ) continue;
-    if( level != 1 ) continue;
-    if( sublevel > 0 && sublevel < nSubDet_+1 ) {
+    if( level != 1 ) continue;	// Detector (DetId==1 is Tracker: DataFormats/DetId/interface/DetId.h)
+    if( sublevel > 0 && sublevel < nSubDet_+1 ) { // Sub-Detector Id
+      // std::cout << "\nyVals[0] = " << yVals.at(0) << std::endl;
+      // std::cout << "yVals[1] = " << yVals.at(1) << std::endl;
       ys.at(sublevel-1).push_back( var1.eval(yVals) );
       xs.at(sublevel-1).push_back( var2.eval(xVals) );
     }
@@ -152,6 +211,9 @@ GeometryComparison::Plots GeometryComparison::createPlots(const Variable &var1, 
     plots[det] = new TGraph(xs.at(l).size(),&(xs.at(l).front()),&(ys.at(l).front()));
   }
 
+  delete tree;
+  file.Close();
+
   return plots;
 }
 
@@ -163,10 +225,10 @@ void GeometryComparison::setStyle(Plots &plots) const {
     it->second->SetMarkerStyle(7);
     if(      det == "PXB" ) it->second->SetMarkerColor(kBlack);
     else if( det == "PXF" ) it->second->SetMarkerColor(kRed);
-    else if( det == "TIB" ) it->second->SetMarkerColor(kBlue);
-    else if( det == "TID" ) it->second->SetMarkerColor(kGreen+2);
+    else if( det == "TIB" ) it->second->SetMarkerColor(kGreen+1);
+    else if( det == "TID" ) it->second->SetMarkerColor(kBlue);
     else if( det == "TOB" ) it->second->SetMarkerColor(kMagenta);
-    else if( det == "TEC" ) it->second->SetMarkerColor(kOrange);
+    else if( det == "TEC" ) it->second->SetMarkerColor(kCyan);
   }
 }
 
