@@ -15,6 +15,7 @@
   const double scale = 5.;
 
   GeometryComparison gc("GT_vs_misalign1.Comparison_commonTracker.root","Misalign_DetUnits_100mu");
+
   gc.draw( "dr:r",   scale*drMin, scale*drMax );
   gc.draw( "dr:z",   scale*drMin, scale*drMax );
   gc.draw( "dr:phi", scale*drMin, scale*drMax );

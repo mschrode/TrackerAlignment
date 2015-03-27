@@ -1,7 +1,7 @@
 {
   gROOT->ProcessLine(".x loadPlotter.C");
 
-  const TString path = "/home/matsch/Documents/TrackerAlignment/studies/validation/geometryComparisons/2012Legacy/";
+  const TString path = "/home/matsch/TrackerAlignment/studies/validation/geometryComparisons/2012Legacy/";
 
   const double drMin    = -100;
   const double drMax    =  100;
@@ -14,12 +14,13 @@
 
   const double scale = 1.;
 
-  const int nFiles = 3;
+  const int nFiles = 4;
   TString fileNames[nFiles] = {
+    path+"mp1535_vs_mp1511.Comparison_commonTracker_Images/mp1535_vs_mp1511.Comparison_commonTracker.root",
     path+"mp1511_vs_mp1510.Comparison_commonTracker_Images/mp1511_vs_mp1510.Comparison_commonTracker.root",
     path+"mp1510_vs_mp1509.Comparison_commonTracker_Images/mp1510_vs_mp1509.Comparison_commonTracker.root",
     path+"mp1509_vs_start.Comparison_commonTracker_Images/mp1509_vs_start.Comparison_commonTracker.root"    };
-  TString ids[nFiles] = { "mp1511_vs_mp1510", "mp1510_vs_mp1509", "mp1509_vs_start" };
+  TString ids[nFiles] = { "mp1535_vs_mp1511", "mp1511_vs_mp1510", "mp1510_vs_mp1509", "mp1509_vs_start" };
   for(int i = 0; i < nFiles; ++i ) {
     GeometryComparison gc(fileNames[i],ids[i]);
     gc.draw( "dr:r",   scale*drMin, scale*drMax );
